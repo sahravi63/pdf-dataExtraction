@@ -1,0 +1,10 @@
+import fitz  # PyMuPDF
+
+file_path = "input.pdf"  # Update this path as needed
+
+try:
+    with fitz.open(file_path) as doc:
+        # Your code to process the PDF
+        print(f"Opened '{file_path}' successfully.")
+except FileNotFoundError:
+    print(f"No such file: '{file_path}'")
