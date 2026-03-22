@@ -186,6 +186,14 @@ B.Tech Computer Science & Engineering — SRM Institute of Science and Technolog
 
 ---
 
+## 🚀 Live Project  
+
+👉 https://pdf-data-extraction-1av5.vercel.app/  
+
+---
+
+
 ## 📄 License
+
 
 This project is open source and available under the [MIT License](LICENSE).
