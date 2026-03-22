@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF · Image · DOCX — Extract, Mask &amp; Translate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <main class="container">
+
+    <header>
+      <div class="logo-mark">EXTRACT</div>
+      <h1>Extract · Mask · Translate</h1>
+      <p class="subtitle">PDF, images &amp; DOCX → masked text in English, Hindi &amp; French</p>
+    </header>
+
+    <section class="upload-card">
+      <form action="/" method="POST" enctype="multipart/form-data" id="upload-form">
+
+        <!-- Dropzone -->
+        <div class="dropzone" id="dropzone">
+          <input type="file" name="files" id="file-input"
+                 accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif" multiple>
+          <div class="dropzone-inner">
+            <div class="dz-icons">
+              <span class="dz-icon">📄</span>
+              <span class="dz-icon">🖼</span>
+              <span class="dz-icon">📝</span>
+            </div>
+            <p class="drop-label">Drop files here or <span class="link">browse</span></p>
+            <p class="drop-hint">PDF · JPG · PNG · WEBP · BMP · TIFF · DOCX &nbsp;·&nbsp; Max 20 MB each</p>
+          </div>
+          <div class="file-list" id="file-list"></div>
+        </div>
+
+        <!-- Extraction options -->
+        <div class="section-label">Extraction</div>
+        <div class="options-row">
+          <label class="toggle-label">
+            <input type="checkbox" name="use_ocr" checked>
+            <span class="toggle"></span>
+            <span>OCR <small>(scanned PDFs &amp; DOCX images)</small></span>
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" name="extract_ner">
+            <span class="toggle"></span>
+            <span>Named entities</span>
+          </label>
+          <label class="lang-label">
+            <span>OCR lang</span>
+            <input type="text" name="ocr_lang" value="en" placeholder="en+hi+fr" class="lang-input">
+          </label>
+        </div>
+
+        <!-- Masking -->
+        <div class="section-label">
+          <label class="toggle-label inline-toggle">
+            <input type="checkbox" name="apply_mask" id="apply_mask" checked>
+            <span class="toggle"></span>
+            <span>Data Masking</span>
+          </label>
+        </div>
+        <div class="mask-panel" id="mask-panel">
+          <p class="mask-hint">Sensitive data replaced with <code class="star-code">****</code> + type label before translating.</p>
+          <div class="mask-types-static">
+            <div class="mask-type-pill"><span class="pill-icon">✉</span> Email</div>
+            <div class="mask-type-pill"><span class="pill-icon">📞</span> Phone</div>
+            <div class="mask-type-pill"><span class="pill-icon">👤</span> Name</div>
+            <div class="mask-type-pill"><span class="pill-icon">💳</span> Credit card</div>
+            <div class="mask-type-pill"><span class="pill-icon">🔗</span> URLs</div>
+          </div>
+        </div>
+
+        <!-- Translation -->
+        <div class="section-label">
+          <label class="toggle-label inline-toggle">
+            <input type="checkbox" name="do_translate" id="do_translate" checked>
+            <span class="toggle"></span>
+            <span>Translate output</span>
+          </label>
+        </div>
+        <div class="translate-panel" id="translate-panel">
+          <p class="mask-hint">Output text will be available in all three tabs below.</p>
+          <div class="lang-pills">
+            <div class="lang-pill active-lang">🇬🇧 English</div>
+            <div class="lang-pill">🇮🇳 Hindi</div>
+            <div class="lang-pill">🇫🇷 French</div>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn">
+          <span class="btn-text">Extract &amp; Process</span>
+          <span class="btn-spinner" hidden>Processing…</span>
+        </button>
+      </form>
+    </section>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">
+              <span class="flash-icon">{% if category=='error' %}✕{% elif category=='warning' %}⚠{% else %}✓{% endif %}</span>
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Results -->
+    {% if results %}
+      <section class="results-section">
+        <h2>Results <span class="result-count">{{ results|length }} file{{ 's' if results|length != 1 }}</span></h2>
+
+        {% for r in results %}
+          <div class="result-card {% if r.error %}result-error-card{% endif %}">
+
+            <!-- Card header -->
+            <div class="result-header">
+              <div class="result-title-group">
+                <span class="file-type-badge ft-{{ r.file_type }}">
+                  {% if r.file_type=='pdf' %}PDF{% elif r.file_type=='image' %}IMG{% else %}DOC{% endif %}
+                </span>
+                <span class="result-filename">{{ r.filename }}</span>
+              </div>
+              {% if not r.error %}
+                <div class="result-actions">
+                  <button class="action-btn" onclick="copyActive({{ loop.index }})">Copy</button>
+                  <a class="action-btn" id="dl-{{ loop.index }}"
+                     href="data:text/plain;charset=utf-8,{{ (r.masked_text if r.masking_applied and r.masked_text else r.raw_text)|urlencode }}"
+                     download="{{ r.filename.rsplit('.',1)[0] }}_processed.txt">Download</a>
+                </div>
+              {% endif %}
+            </div>
+
+            {% if r.error %}
+              <p class="result-error-msg">{{ r.error }}</p>
+
+            {% else %}
+              <!-- Mask summary -->
+              {% if r.masking_applied %}
+                <div class="mask-summary-row">
+                  {% if r.mask_report %}
+                    <span class="lock-icon">🔒</span>
+                    {% for label, count in r.mask_report.items() %}
+                      <span class="mask-badge">
+                        {% if label=='EMAIL' %}✉{% elif label=='PHONE' %}📞{% elif label=='NAME' %}👤{% elif label=='CARD' %}💳{% else %}🔗{% endif %}
+                        {{ label }} <strong>×{{ count }}</strong>
+                      </span>
+                    {% endfor %}
+                    <span class="mask-total">{{ r.mask_report.values()|sum }} item{{ 's' if r.mask_report.values()|sum != 1 }} masked</span>
+                  {% else %}
+                    <span>✅ No sensitive data detected.</span>
+                  {% endif %}
+                </div>
+              {% endif %}
+
+              <!-- NER -->
+              {% if r.entities %}
+                <div class="entity-block">
+                  <p class="entity-title">Named Entities</p>
+                  <div class="entity-grid">
+                    {% for label, values in r.entities.items() %}
+                      <div class="entity-group">
+                        <span class="entity-label">{{ label }}</span>
+                        <span class="entity-values">{{ values|join(', ') }}</span>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+
+              <!-- Language tabs -->
+              {% set idx = loop.index %}
+              {% if r.translation_applied and r.translations %}
+                <div class="lang-tabs" id="lang-tabs-{{ idx }}">
+                  {% for lang in languages %}
+                    <button class="lang-tab {% if loop.first %}active-lang-tab{% endif %}"
+                            onclick="switchLang({{ idx }}, '{{ lang }}')">
+                      {% if lang=='English' %}🇬🇧{% elif lang=='Hindi' %}🇮🇳{% else %}🇫🇷{% endif %}
+                      {{ lang }}
+                    </button>
+                  {% endfor %}
+                  <!-- Also show masked/original toggle -->
+                  {% if r.masking_applied and r.masked_text %}
+                    <div class="tab-divider"></div>
+                    <button class="lang-tab mask-tab active-mask-tab" id="mt-masked-{{ idx }}"
+                            onclick="switchMask({{ idx }},'masked')">Masked</button>
+                    <button class="lang-tab mask-tab" id="mt-original-{{ idx }}"
+                            onclick="switchMask({{ idx }},'original')">Original</button>
+                  {% endif %}
+                </div>
+
+                <!-- One pre per language -->
+                {% for lang in languages %}
+                  <pre class="text-output lang-panel {% if loop.first %}show{% else %}hide{% endif %}"
+                       id="pre-{{ idx }}-{{ lang }}-masked"
+                       data-lang="{{ lang }}" data-mask="masked">{{ r.translations[lang] if lang in r.translations else r.masked_text }}</pre>
+                  <pre class="text-output lang-panel hide"
+                       id="pre-{{ idx }}-{{ lang }}-original"
+                       data-lang="{{ lang }}" data-mask="original">{{ r.translations[lang] if lang in r.translations else r.raw_text }}</pre>
+                {% endfor %}
+
+              {% else %}
+                <!-- No translation — just masked / original toggle -->
+                {% if r.masking_applied and r.masked_text %}
+                  <div class="lang-tabs">
+                    <button class="lang-tab active-lang-tab" id="mt-masked-{{ idx }}"
+                            onclick="switchMask({{ idx }},'masked')">Masked</button>
+                    <button class="lang-tab" id="mt-original-{{ idx }}"
+                            onclick="switchMask({{ idx }},'original')">Original</button>
+                  </div>
+                  <pre id="pre-{{ idx }}-masked" class="text-output show">{{ r.masked_text }}</pre>
+                  <pre id="pre-{{ idx }}-original" class="text-output hide">{{ r.raw_text }}</pre>
+                {% elif r.raw_text %}
+                  <pre id="pre-{{ idx }}-masked" class="text-output show">{{ r.raw_text }}</pre>
+                {% else %}
+                  <p class="no-text-msg">⚠ No text found. Enable OCR for scanned/image files.</p>
+                {% endif %}
+              {% endif %}
+
+            {% endif %}
+          </div>
+        {% endfor %}
+      </section>
+    {% endif %}
+  </main>
+
+  <script>
+    // ── Dropzone ───────────────────────────────────────
+    const dz = document.getElementById('dropzone');
+    const fi = document.getElementById('file-input');
+    dz.addEventListener('click', e => { if (!e.target.closest('button,a')) fi.click(); });
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragging'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragging'));
+    dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragging'); fi.files = e.dataTransfer.files; renderFiles(); });
+    fi.addEventListener('change', renderFiles);
+
+    const TYPE_ICONS = {pdf:'📄', docx:'📝', jpg:'🖼', jpeg:'🖼', png:'🖼', webp:'🖼', bmp:'🖼', tiff:'🖼', tif:'🖼'};
+    function renderFiles() {
+      document.getElementById('file-list').innerHTML = Array.from(fi.files).map(f => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        const icon = TYPE_ICONS[ext] || '📁';
+        return `<div class="file-chip">${icon} ${f.name} <small>(${(f.size/1024/1024).toFixed(1)} MB)</small></div>`;
+      }).join('');
+    }
+
+    // ── Panel toggles ──────────────────────────────────
+    function bindToggle(checkId, panelId) {
+      const chk = document.getElementById(checkId);
+      const pan = document.getElementById(panelId);
+      if (!chk || !pan) return;
+      pan.style.display = chk.checked ? 'block' : 'none';
+      chk.addEventListener('change', () => { pan.style.display = chk.checked ? 'block' : 'none'; });
+    }
+    bindToggle('apply_mask',   'mask-panel');
+    bindToggle('do_translate', 'translate-panel');
+
+    // ── Spinner ────────────────────────────────────────
+    document.getElementById('upload-form').addEventListener('submit', () => {
+      document.querySelector('.btn-text').hidden = true;
+      document.querySelector('.btn-spinner').hidden = false;
+    });
+
+    // ── Language tab switch ────────────────────────────
+    // Tracks active lang and mask state per result card
+    const state = {};   // state[idx] = { lang, mask }
+
+    function getState(idx) {
+      if (!state[idx]) state[idx] = { lang: '{{ languages[0] }}', mask: 'masked' };
+      return state[idx];
+    }
+
+    function showPanel(idx) {
+      const s = getState(idx);
+      document.querySelectorAll(`[id^="pre-${idx}-"]`).forEach(el => el.classList.replace('show','hide') || el.classList.add('hide'));
+      // Try lang+mask panel first, fall back to simple id
+      const target = document.getElementById(`pre-${idx}-${s.lang}-${s.mask}`)
+                  || document.getElementById(`pre-${idx}-${s.mask}`)
+                  || document.getElementById(`pre-${idx}-masked`);
+      if (target) { target.classList.remove('hide'); target.classList.add('show'); }
+    }
+
+    function switchLang(idx, lang) {
+      getState(idx).lang = lang;
+      // Update lang tab buttons
+      document.querySelectorAll(`#lang-tabs-${idx} .lang-tab:not(.mask-tab)`).forEach(btn => {
+        btn.classList.toggle('active-lang-tab', btn.textContent.trim().endsWith(lang));
+      });
+      showPanel(idx);
+    }
+
+    function switchMask(idx, mask) {
+      getState(idx).mask = mask;
+      const mt = ['masked','original'];
+      mt.forEach(m => {
+        const btn = document.getElementById(`mt-${m}-${idx}`);
+        if (btn) btn.classList.toggle('active-mask-tab', m === mask);
+      });
+      showPanel(idx);
+    }
+
+    // ── Copy active panel ──────────────────────────────
+    function copyActive(idx) {
+      const visible = document.querySelector(`[id^="pre-${idx}-"].show`);
+      navigator.clipboard.writeText(visible ? visible.textContent : '').then(() => {
+        const btn = event.target;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+      });
+    }
+  </script>
+</body>
+</html>
