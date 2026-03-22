@@ -182,7 +182,7 @@ pdf-dataExtraction-main/
 B.Tech Computer Science & Engineering — SRM Institute of Science and Technology
 
 [![GitHub](https://img.shields.io/badge/GitHub-sahravi63-black?style=flat-square&logo=github)](https://github.com/sahravi63)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-ravi--sah-blue?style=flat-square&logo=linkedin)](https://linkedin.com/in/ravi-sah)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-ravi--sah-blue?style=flat-square&logo=linkedin)](https://www.linkedin.com/in/sahravi63)
 
 ---
 
